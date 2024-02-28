@@ -1,6 +1,6 @@
 # Description: Simulador de un sistema operativo con un procesador y memoria RAM
 # Autor: Juan Solís
-# Version: 1.0
+#Version: 1.0
 
 import simpy
 import random
@@ -12,6 +12,8 @@ class Proceso:
         self.ram_requerida = ram_requerida
         self.cantidad_instrucciones = cantidad_instrucciones
         self.estado = None
+        self.tiempo_inicial = 0
+        self.tiempo_final = 0
 
 # Función que simula la llegada de un proceso al sistema
 def llega_proceso_al_sistema(env, ram, cpu, cantidad_procesos):
@@ -25,11 +27,12 @@ def llega_proceso_al_sistema(env, ram, cpu, cantidad_procesos):
 
         proceso = Proceso(id_proceso, ram_requerida, cantidad_instrucciones)
         id_proceso += 1
+        proceso.tiempo_inicial = env.now
 
         with ram.get(ram_requerida) as recurso:
             # Ready
             yield recurso
-            proceso.estado = 'ready'
+            proceso.estado = 'Ready'
             yield env.timeout(1)
 
         env.process(se_atiende_el_proceso(env, proceso, ram, cpu))
@@ -40,6 +43,7 @@ def se_atiende_el_proceso(env, proceso, ram, cpu):
     #Running
     while True:
         if proceso.cantidad_instrucciones <= 0:
+            proceso.tiempo_fin = env.now
             proceso.estado = 'Terminated'
             ram.put(proceso.ram_requerida)
             break
@@ -47,8 +51,12 @@ def se_atiende_el_proceso(env, proceso, ram, cpu):
         with cpu.request() as recurso_cpu:
             yield recurso_cpu
             proceso.estado = 'Running'
+            tiempo_atencion = min(proceso.cantidad_instrucciones, instrucciones_atendibles)
+            yield env.timeout(tiempo_atencion)
+            proceso.cantidad_instrucciones -= tiempo_atencion
 
             if proceso.cantidad_instrucciones <= 0:
+                proceso.tiempo_fin = env.now
                 proceso.estado = 'Terminated'
                 ram.put(proceso.ram_requerida)
                 print(f"{proceso.id}, {env.now}")
